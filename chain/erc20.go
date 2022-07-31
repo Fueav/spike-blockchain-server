@@ -5,14 +5,33 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/go-redis/redis"
 	"math/big"
 	"strings"
-	"time"
 )
+
+type USDCTarget struct {
+	txAddress string
+}
+
+func newUSDCTarget(address string) *USDCTarget {
+	return &USDCTarget{
+		txAddress: address,
+	}
+}
+
+func (t *USDCTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
+	if strings.ToLower(t.txAddress) == strings.ToLower(toAddr) {
+		return true, USDC_RECHARGE
+	}
+
+	if strings.ToLower(t.txAddress) == strings.ToLower(fromAddr) {
+		return true, USDC_WITHDRAW
+	}
+
+	return false, NOT_EXIST
+}
 
 type SKSTarget struct {
 	txAddress string
@@ -63,19 +82,19 @@ type ERC20Listener struct {
 	contractAddr   string
 	cacheBlockNum  string
 	erc20Notify    chan ERC20Tx
-	rechargeNotify chan ERC20Tx
+	newBlockNotify DataChannel
 	ec             *ethclient.Client
 	rc             *redis.Client
 	abi            abi.ABI
 }
 
-func newERC20Listener(filter TxFilter, contractAddr string, cacheBlockNum string, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx, rechargeNotify chan ERC20Tx, abi abi.ABI) *ERC20Listener {
+func newERC20Listener(filter TxFilter, contractAddr string, cacheBlockNum string, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx, newBlockNotify DataChannel, abi abi.ABI) *ERC20Listener {
 	return &ERC20Listener{
 		filter,
 		contractAddr,
 		cacheBlockNum,
 		erc20Notify,
-		rechargeNotify,
+		newBlockNotify,
 		ec,
 		rc,
 		abi,
@@ -83,87 +102,24 @@ func newERC20Listener(filter TxFilter, contractAddr string, cacheBlockNum string
 }
 
 func (el *ERC20Listener) run() {
-	go el.NewEventFilter(el.contractAddr, el.TxFilter)
-	if el.rc.Get(el.cacheBlockNum).Err() == redis.Nil {
-		log.Infof("%s is not exist", el.cacheBlockNum)
-		return
-	}
-	nowBlockNum, err := el.ec.BlockNumber(context.Background())
-	if err != nil {
-		log.Errorf("query now %s blockNum err : %+v", el.cacheBlockNum, err)
-		return
-	}
-
-	blockNum, err := el.rc.Get(el.cacheBlockNum).Uint64()
-	if blockNum < nowBlockNum {
-		el.PastEventFilter(el.contractAddr, blockNum, nowBlockNum, el.TxFilter)
-	}
+	go el.NewEventFilter(el.contractAddr)
 }
 
-func (el *ERC20Listener) NewEventFilter(contractAddr string, filter TxFilter) error {
-	newEventChan := make(chan types.Log)
-	ethClient := el.ec
-	contractAddress := common.HexToAddress(contractAddr)
-	query := ethereum.FilterQuery{
-		Addresses: []common.Address{contractAddress},
-	}
-	sub, err := ethClient.SubscribeFilterLogs(context.Background(), query, newEventChan)
-	if err != nil {
-		//log
-		return err
-	}
+func (el *ERC20Listener) handlePastBlock(fromBlock, toBlock uint64) {
+	go el.PastEventFilter(el.contractAddr, fromBlock, toBlock)
+}
+
+func (el *ERC20Listener) NewEventFilter(contractAddr string) error {
 	for {
 		select {
-		case err := <-sub.Err():
-			log.Errorf("erc 20 %s sub err : %+v", el.contractAddr, err)
-			sub = event.Resubscribe(time.Millisecond, func(ctx context.Context) (event.Subscription, error) {
-				return ethClient.SubscribeFilterLogs(context.Background(), query, newEventChan)
-			})
-		case log := <-newEventChan:
-			switch log.Topics[0].String() {
-			case eventSignHash(TransferTopic):
-				intr, err := el.abi.Events["Transfer"].Inputs.Unpack(log.Data)
-				if err != nil {
-					break
-				}
-				fromAddr := common.HexToAddress(log.Topics[1].Hex()).String()
-				toAddr := common.HexToAddress(log.Topics[2].Hex()).String()
-				accept, txType := el.Accept(fromAddr, toAddr)
-				if !accept {
-					continue
-				}
-				var status uint64
-				recp, err := el.ec.TransactionReceipt(context.Background(), log.TxHash)
-				status = recp.Status
-				if err != nil {
-					status = 0
-				}
-				block, err := el.ec.BlockByNumber(context.Background(), big.NewInt(int64(log.BlockNumber)))
-				if err != nil {
-					status = 0
-				}
-				tx := ERC20Tx{
-					From:    fromAddr,
-					To:      toAddr,
-					TxType:  txType,
-					TxHash:  log.TxHash.Hex(),
-					Status:  status,
-					PayTime: int64(block.Time() * 1000),
-					Amount:  intr[0].(*big.Int).String(),
-				}
-
-				if check(int(txType)) {
-					el.rechargeNotify <- tx
-				} else {
-					el.erc20Notify <- tx
-				}
-			}
-			el.rc.Set(el.cacheBlockNum, log.BlockNumber, 0)
+		case de := <-el.newBlockNotify:
+			height := de.Data.(*big.Int).Uint64()
+			el.PastEventFilter(contractAddr, height, height)
 		}
 	}
 }
 
-func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBlockNum uint64, filter TxFilter) error {
+func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBlockNum uint64) error {
 	log.Infof("erc20 past event filter, type : %s, fromBlock : %d, toBlock : %d ", el.cacheBlockNum, fromBlockNum, toBlockNum)
 	ethClient := el.ec
 	contractAddress := common.HexToAddress(contractAddr)

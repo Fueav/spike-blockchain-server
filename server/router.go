@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"spike-blockchain-server/middleware"
 
 	"spike-blockchain-server/api"
 	"spike-blockchain-server/chain"
@@ -14,6 +15,7 @@ func NewRouter(chainApi *chain.BscListener) *gin.Engine {
 	//r.Use(middleware.EthSignatureVerify())
 	//r.Use(middleware.ApiKeyAuth())
 	//r.Use(middleware.LoggerToFile())
+	r.Use(middleware.Cors())
 
 	v1 := r.Group("/api/v1")
 	{
@@ -39,6 +41,8 @@ func NewRouter(chainApi *chain.BscListener) *gin.Engine {
 			chain.POST("tx/isPending", chainApi.QueryTxIsPendingByHash)
 			chain.POST("tx/status", chainApi.QueryTxStatusByHash)
 			chain.POST("nft/metadata", chainApi.QueryNftMetadata)
+			chain.POST("nft/type", chainApi.QueryWalletAddrNft)
+			chain.POST("nft/list", chainApi.QueryNftListByType)
 		}
 		wallet := v1.Group("/wallet")
 		{

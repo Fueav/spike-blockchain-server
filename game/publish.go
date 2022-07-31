@@ -12,6 +12,7 @@ const (
 	ERC20TXTOPIC    = "ack_erc20tx"
 	ERC721TXTOPIC   = "ack_erc721tx"
 	RECHARGETXTOPIC = "recharge"
+	IMPORTNFTTOPIC  = "import_nft"
 )
 
 type Msg struct {

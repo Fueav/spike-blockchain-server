@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"context"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-redis/redis"
 	logger "github.com/ipfs/go-log"
@@ -17,6 +18,7 @@ const (
 	SKK_BLOCKNUM   = "skk_blockNum"
 	SKS_BLOCKNUM   = "sks_blockNum"
 	AUNFT_BLOCKNUM = "aunft_blockNum"
+	BLOCK_NUM      = "blockNum"
 )
 
 type BscListener struct {
@@ -37,15 +39,25 @@ func NewBscListener(speedyNodeAddress string, targetWalletAddr string) (*BscList
 	bl.rc = cache.RedisClient
 	bl.ec = client
 	erc20Notify := make(chan ERC20Tx, 10)
-	rechargeNotify := make(chan ERC20Tx, 10)
 	erc721Notify := make(chan ERC721Tx, 10)
+
+	usdcChan := make(DataChannel, 10)
+	skkChan := make(DataChannel, 10)
+	sksChan := make(DataChannel, 10)
+	aunftChan := make(DataChannel, 10)
+	eb.Subscribe(newBlockTopic, usdcChan)
+	eb.Subscribe(newBlockTopic, skkChan)
+	eb.Subscribe(newBlockTopic, sksChan)
+	eb.Subscribe(newBlockTopic, aunftChan)
+
 	l := make(map[TokenType]Listener)
-	l[BNB] = newBNBListener(newBNBTarget(targetWalletAddr), bl.ec, bl.rc, erc20Notify, rechargeNotify)
-	l[SKK] = newERC20Listener(newSKKTarget(targetWalletAddr), SKKContractAddress, SKK_BLOCKNUM, bl.ec, bl.rc, erc20Notify, rechargeNotify, getABI(SKKContractAbi))
-	l[SKS] = newERC20Listener(newSKSTarget(targetWalletAddr), SKSContractAddress, SKS_BLOCKNUM, bl.ec, bl.rc, erc20Notify, rechargeNotify, getABI(SKSContractAbi))
-	l[AUNFT] = newAUNFTListener(bl.ec, bl.rc, erc721Notify, getABI(AUNFTAbi))
+	l[BNB] = newBNBListener(newBNBTarget(targetWalletAddr), bl.ec, bl.rc, erc20Notify)
+	l[USDC] = newERC20Listener(newUSDCTarget(targetWalletAddr), USDCContractAddress, USDC_BLOCKNUM, bl.ec, bl.rc, erc20Notify, usdcChan, getABI(USDCContractAbi))
+	l[SKK] = newERC20Listener(newSKKTarget(targetWalletAddr), SKKContractAddress, SKK_BLOCKNUM, bl.ec, bl.rc, erc20Notify, skkChan, getABI(SKKContractAbi))
+	l[SKS] = newERC20Listener(newSKSTarget(targetWalletAddr), SKSContractAddress, SKS_BLOCKNUM, bl.ec, bl.rc, erc20Notify, sksChan, getABI(SKSContractAbi))
+	l[AUNFT] = newAUNFTListener(newAUNFTTarget(targetWalletAddr), AUNFTContractAddress, AUNFT_BLOCKNUM, bl.ec, bl.rc, erc721Notify, aunftChan, getABI(AUNFTAbi))
 	bl.l = l
-	spikeTxMgr := newSpikeTxMgr(game.NewKafkaClient(os.Getenv("KAFKA_ADDR")), erc20Notify, rechargeNotify, erc721Notify)
+	spikeTxMgr := newSpikeTxMgr(game.NewKafkaClient(os.Getenv("KAFKA_ADDR")), erc20Notify, erc721Notify)
 	go spikeTxMgr.run()
 	return bl, nil
 }
@@ -55,6 +67,28 @@ func (bl *BscListener) Run() {
 		go func(l Listener) {
 			l.run()
 		}(listener)
+	}
+
+	if bl.rc.Get(BLOCK_NUM).Err() == redis.Nil {
+		log.Infof("blockNum is not exist")
+		return
+	}
+	nowBlockNum, err := bl.ec.BlockNumber(context.Background())
+	if err != nil {
+		log.Error("query now bnb_blockNum err :", err)
+		return
+	}
+	cacheBlockNum, err := bl.rc.Get(BLOCK_NUM).Uint64()
+	if err != nil {
+		log.Error("query cache bnb_blockNum err : ", err)
+		return
+	}
+	if cacheBlockNum < nowBlockNum-blockConfirmHeight {
+		for _, listener := range bl.l {
+			go func(l Listener) {
+				l.handlePastBlock(cacheBlockNum, nowBlockNum-blockConfirmHeight)
+			}(listener)
+		}
 
 	}
 }
