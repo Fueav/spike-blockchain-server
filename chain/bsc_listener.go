@@ -22,20 +22,33 @@ const (
 )
 
 type BscListener struct {
-	ec *ethclient.Client
-	rc *redis.Client
-	l  map[TokenType]Listener
+	network string
+	manager *Manager
+	ec      *ethclient.Client
+	rc      *redis.Client
+	l       map[TokenType]Listener
 }
 
 func NewBscListener(speedyNodeAddress string, targetWalletAddr string) (*BscListener, error) {
 	log.Infof("bsc listener start")
 	bl := &BscListener{}
+	bl.manager = NewManager()
 
 	client, err := ethclient.Dial(speedyNodeAddress)
 	if err != nil {
 		log.Error("eth client dial err : ", err)
 		return nil, err
 	}
+	chainId, err := client.ChainID(context.Background())
+	switch chainId.String() {
+	case "56":
+		bl.network = "bsc"
+	case "97":
+		bl.network = "bsc testnet"
+	default:
+		panic("not expected chainId")
+	}
+
 	bl.rc = cache.RedisClient
 	bl.ec = client
 	erc20Notify := make(chan ERC20Tx, 10)

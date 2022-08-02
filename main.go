@@ -16,7 +16,7 @@ func main() {
 		//log
 		return
 	}
-	//bscClient.Run()
+	bscClient.Run()
 
 	r := server.NewRouter(bscClient)
 	r.Run(":3000")

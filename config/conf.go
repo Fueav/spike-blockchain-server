@@ -7,7 +7,7 @@ import (
 )
 
 func Init() {
-	err := godotenv.Load()
+	err := godotenv.Load("/root/go/src/github.com/spike-engine/spike-blockchain-server/.env")
 	if err != nil {
 		panic(err)
 	}
