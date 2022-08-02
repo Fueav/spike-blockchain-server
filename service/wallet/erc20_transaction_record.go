@@ -46,7 +46,7 @@ func (s *ERC20TransactionRecordService) FindERC20TransactionRecord() serializer.
 			Error: err.Error(),
 		}
 	}
-	var bscRes BscRes
+	bscRes := &BscRes{Result: make([]Result, 0)}
 
 	err = json.Unmarshal(resp.Body(), &bscRes)
 	if err != nil {

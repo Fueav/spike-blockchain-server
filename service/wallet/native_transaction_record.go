@@ -51,8 +51,8 @@ func (s *NativeTransactionRecordService) FindNativeTransactionRecord() serialize
 			Error: err.Error(),
 		}
 	}
-	var bscRes BscRes
-	var bnbRecord []Result
+	bscRes := &BscRes{Result: make([]Result, 0)}
+	bnbRecord := make([]Result, 0)
 
 	err = json.Unmarshal(resp.Body(), &bscRes)
 	if err != nil {
@@ -61,6 +61,7 @@ func (s *NativeTransactionRecordService) FindNativeTransactionRecord() serialize
 			Error: err.Error(),
 		}
 	}
+
 	if len(bscRes.Result) != 0 {
 
 		for i, result := range bscRes.Result {
@@ -107,9 +108,13 @@ func (s *NativeTransactionRecordService) FindNativeTransactionRecord() serialize
 			}
 
 		}
+		bscRes.Result = bnbRecord
+		return serializer.Response{
+			Code: 200,
+			Data: bscRes,
+		}
 	}
-
-	bscRes.Result = bnbRecord
+	bscRes.Result = make([]Result, 0)
 	return serializer.Response{
 		Code: 200,
 		Data: bscRes,
