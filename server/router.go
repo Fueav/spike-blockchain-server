@@ -42,8 +42,8 @@ func NewRouter(chainApi *chain.BscListener) *gin.Engine {
 		}
 		wallet := v1.Group("/wallet")
 		{
-			wallet.GET("erc20", api.ERC20TxRecord)
-			wallet.GET("native", api.NativeTxRecord)
+			wallet.POST("erc20", api.ERC20TxRecord)
+			wallet.POST("native", api.NativeTxRecord)
 		}
 	}
 	return r

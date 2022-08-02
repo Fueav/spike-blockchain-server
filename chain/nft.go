@@ -67,7 +67,7 @@ func (al *AUNFTListener) NewEventFilter(contractAddr string) error {
 			})
 		case l := <-newEventChan:
 			switch l.Topics[0].String() {
-			case eventSignHash(TransferTopic):
+			case EventSignHash(TransferTopic):
 				var status uint64
 				recp, err := al.ec.TransactionReceipt(context.Background(), l.TxHash)
 				status = recp.Status
@@ -114,7 +114,7 @@ func (al *AUNFTListener) PastEventFilter(contractAddr string, fromBlockNum, toBl
 	}
 	for _, l := range sub {
 		switch l.Topics[0].String() {
-		case eventSignHash(TransferTopic):
+		case EventSignHash(TransferTopic):
 			var status uint64
 			recp, err := al.ec.TransactionReceipt(context.Background(), l.TxHash)
 			status = recp.Status

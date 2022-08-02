@@ -4,11 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-resty/resty/v2"
+	"math/big"
 	"os"
+	"spike-blockchain-server/chain"
 	"spike-blockchain-server/constants"
 	"spike-blockchain-server/serializer"
+	"strconv"
+	"strings"
 )
 
 type NativeTransactionRecordService struct {
@@ -57,10 +63,49 @@ func (s *NativeTransactionRecordService) FindNativeTransactionRecord() serialize
 	}
 	if len(bscRes.Result) != 0 {
 
-		for i := range bscRes.Result {
+		for i, result := range bscRes.Result {
 			if bscRes.Result[i].Input == "0x" {
 				bnbRecord = append(bnbRecord, bscRes.Result[i])
+				continue
 			}
+			methodId := result.Input[0:10]
+			switch methodId {
+			case hexutil.Encode(chain.GetTxMethodName("swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)")):
+				height, err := strconv.ParseInt(bscRes.Result[i].BlockNumber, 10, 64)
+				if err != nil {
+					return serializer.Response{
+						Code:  406,
+						Error: err.Error(),
+					}
+				}
+
+				query := ethereum.FilterQuery{
+					FromBlock: big.NewInt(height),
+					ToBlock:   big.NewInt(height),
+				}
+				sub, err := bscClient.FilterLogs(context.Background(), query)
+				if err != nil {
+					return serializer.Response{
+						Code:  407,
+						Error: err.Error(),
+					}
+				}
+				for _, logEvent := range sub {
+					if logEvent.Topics[0].String() == chain.EventSignHash(chain.WITHRAWALTOPIC) {
+						bscRes.Result[i].Type = "Receive"
+						value := new(big.Int)
+						value.SetString(strings.Split(hexutil.Encode(logEvent.Data), "0x")[1], 16)
+
+						bscRes.Result[i].Value = value.String()
+						bnbRecord = append(bnbRecord, bscRes.Result[i])
+						break
+					}
+				}
+			case hexutil.Encode(chain.GetTxMethodName("swapExactETHForTokens(uint256,address[],address,uint256)")):
+				bscRes.Result[i].Type = "Send"
+				bnbRecord = append(bnbRecord, bscRes.Result[i])
+			}
+
 		}
 	}
 
