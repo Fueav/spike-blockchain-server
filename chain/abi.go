@@ -3,6 +3,7 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/sha3"
 	"strings"
 )
 
@@ -10,6 +11,7 @@ const (
 	TransferTopic             = "Transfer(address,address,uint256)"
 	ApprovalTopic             = "Approval(address,address,uint256)"
 	OwnershipTransferredTopic = "OwnershipTransferred(address,address)"
+	WITHRAWALTOPIC            = "Withdrawal(address,uint256)"
 )
 
 const (
@@ -20,10 +22,17 @@ const (
 	//AUNFTContractAddress = "0x3ebdad182ea4f8d389c1ecdfeb3584f6bf416fd3"
 )
 
-func eventSignHash(eventTopic string) string {
+func EventSignHash(eventTopic string) string {
 	eventSignature := []byte(eventTopic)
 	hash := crypto.Keccak256Hash(eventSignature)
 	return hash.Hex()
+}
+
+func GetTxMethodName(method string) []byte {
+	methodName := []byte(method)
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(methodName)
+	return hash.Sum(nil)[:4]
 }
 
 func getABI(abiJSON string) abi.ABI {

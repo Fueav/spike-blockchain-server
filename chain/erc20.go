@@ -137,7 +137,7 @@ func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBl
 	}
 	for _, logEvent := range sub {
 		switch logEvent.Topics[0].String() {
-		case eventSignHash(TransferTopic):
+		case EventSignHash(TransferTopic):
 			intr, err := el.abi.Events["Transfer"].Inputs.Unpack(logEvent.Data)
 			if err != nil {
 				log.Error("erc20 data unpack err : ", err)

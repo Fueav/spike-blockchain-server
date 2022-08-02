@@ -94,7 +94,7 @@ func (al *AUNFTListener) PastEventFilter(fromBlockNum, toBlockNum uint64) error 
 	}
 	for _, l := range sub {
 		switch l.Topics[0].String() {
-		case eventSignHash(TransferTopic):
+		case EventSignHash(TransferTopic):
 			var status uint64
 			recp, err := al.ec.TransactionReceipt(context.Background(), l.TxHash)
 			status = recp.Status
