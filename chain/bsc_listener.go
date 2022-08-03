@@ -22,17 +22,21 @@ const (
 )
 
 type BscListener struct {
-	network string
-	manager *Manager
-	ec      *ethclient.Client
-	rc      *redis.Client
-	l       map[TokenType]Listener
+	network   string
+	nlManager *NftListManager
+	ntManager *NativeTxManager
+	etManager *ERC20TxManager
+	ec        *ethclient.Client
+	rc        *redis.Client
+	l         map[TokenType]Listener
 }
 
 func NewBscListener(speedyNodeAddress string, targetWalletAddr string) (*BscListener, error) {
 	log.Infof("bsc listener start")
 	bl := &BscListener{}
-	bl.manager = NewManager()
+	bl.nlManager = NewNftListManager()
+	bl.ntManager = NewNativeTxManager()
+	bl.etManager = NewERC20TxManager()
 
 	client, err := ethclient.Dial(speedyNodeAddress)
 	if err != nil {

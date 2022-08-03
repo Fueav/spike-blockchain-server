@@ -24,8 +24,10 @@ import (
 )
 
 const (
-	duration      = 10 * time.Minute
-	nftTypeSuffix = "_nftType"
+	duration             = 10 * time.Minute
+	nftTypeSuffix        = "_nftType"
+	nativeTxRecordSuffix = "_nativeTxRecord"
+	erc20TxRecordSuffix  = "_erc20TxRecord"
 )
 
 type balanceShow struct {
@@ -355,8 +357,8 @@ func (bl *BscListener) queryWalletAddrNft(addr string, network string) serialize
 
 func (bl *BscListener) queryNftFromMoralis(addr string, network string) ([]NftType, error) {
 	uuid := uuid.New()
-	bl.manager.QueryNftList(uuid, addr, network)
-	result, err := bl.manager.WaitCall(uuid)
+	bl.nlManager.QueryNftList(uuid, addr, network)
+	result, err := bl.nlManager.WaitCall(uuid)
 	nr := result.([]NftResult)
 	nr = bl.convertNftResult(nr)
 	dataList := parseMetadata(nr)
