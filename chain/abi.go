@@ -15,10 +15,14 @@ const (
 )
 
 const (
-	USDCContractAddress  = "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"
-	SKKContractAddress   = "0x9bcF34b02ba3960F25c1430840F73E8ffc27f68f"
-	SKSContractAddress   = "0xA14Ee2adA536Dc39dF133bC7Ec76Ca8E37c65C18"
-	AUNFTContractAddress = "0x7dc7CeD2233B7c409a58bf578945f0DC981313e8"
+	//USDCContractAddress  = "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"
+	//SKKContractAddress   = "0x9bcF34b02ba3960F25c1430840F73E8ffc27f68f"
+	//SKSContractAddress   = "0xA14Ee2adA536Dc39dF133bC7Ec76Ca8E37c65C18"
+	//AUNFTContractAddress = "0x7dc7CeD2233B7c409a58bf578945f0DC981313e8"
+	USDCContractAddress  = "0x64544969ed7EBf5f083679233325356EbE738930"
+	SKKContractAddress   = "0x9835B7731017f52AdaDbB1d9f2E3aAA88C7D5Db6"
+	SKSContractAddress   = "0xf469a2c958Cb0eEE939aBc09551175cD7BEfCb2F"
+	AUNFTContractAddress = "0x5c6Df032e709Bd387Fbfd77B7Dff752c268ef1B3"
 )
 
 func EventSignHash(eventTopic string) string {

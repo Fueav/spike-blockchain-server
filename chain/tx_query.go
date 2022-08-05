@@ -3,6 +3,7 @@ package chain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,8 @@ import (
 	"sync"
 	"time"
 )
+
+var ErrorParam = errors.New("params error")
 
 const (
 	duration             = 10 * time.Minute
@@ -55,11 +58,11 @@ type CacheDataList struct {
 }
 
 type txQueryService struct {
-	TxHash string `json:"txHash"`
+	TxHash string `json:"txHash" binding:"required"`
 }
 
 type balanceService struct {
-	Address string `json:"address"`
+	Address string `json:"address" binding:"required"`
 }
 
 type metadataService struct {
@@ -68,7 +71,7 @@ type metadataService struct {
 }
 
 type nftTypeService struct {
-	WalletAddress string `json:"walletAddress"`
+	WalletAddress string `json:"walletAddress" binding:"required"`
 }
 
 type nftMetadataService struct {
@@ -267,7 +270,10 @@ func (bl *BscListener) QueryNftListByType(c *gin.Context) {
 		res := bl.queryNftListByType(service.WalletAddress, bl.network, service.Type, int64(service.Page), int64(service.PageSize))
 		c.JSON(200, res)
 	} else {
-		c.JSON(500, err.Error())
+		c.JSON(500, serializer.Response{
+			Code: 500,
+			Msg:  ErrorParam.Error(),
+		})
 	}
 }
 
@@ -323,7 +329,10 @@ func (bl *BscListener) QueryWalletAddrNft(c *gin.Context) {
 		log.Info("sss:", res.Data)
 		c.JSON(200, res)
 	} else {
-		c.JSON(500, err.Error())
+		c.JSON(500, serializer.Response{
+			Code: 500,
+			Msg:  ErrorParam.Error(),
+		})
 	}
 }
 
@@ -345,8 +354,8 @@ func (bl *BscListener) queryWalletAddrNft(addr string, network string) serialize
 	nftType, err := bl.queryNftFromMoralis(addr, network)
 	if err != nil {
 		return serializer.Response{
-			Code:  500,
-			Error: err.Error(),
+			Code: 500,
+			Msg:  err.Error(),
 		}
 	}
 	return serializer.Response{
@@ -407,16 +416,16 @@ func (bl *BscListener) convertNftResult(res []NftResult) []NftResult {
 		return res
 	}
 	for k, v := range res {
-		if v.TokenUri == "" {
+		if v.TokenUri == "" || v.Metadata == "" {
 			tokenId, err := strconv.Atoi(v.TokenId)
 			if err != nil {
 				log.Errorf("string %s convert int err : %v", v.TokenId, err)
-				break
+				continue
 			}
 			uri, err := aunft.TokenURI(nil, big.NewInt(int64(tokenId)))
 			if err != nil {
 				log.Error("query tokenUri err : ", err)
-				break
+				continue
 			}
 			client := resty.New()
 			t3 := time.Now()
@@ -426,11 +435,11 @@ func (bl *BscListener) convertNftResult(res []NftResult) []NftResult {
 			var m Metadata
 			err = json.Unmarshal(resp.Body(), &m)
 			if err != nil {
-				break
+				continue
 			}
 			metadata, err := json.Marshal(m)
 			if err != nil {
-				break
+				continue
 			}
 			res[k].TokenUri = uri
 			res[k].Metadata = string(metadata)
@@ -463,12 +472,12 @@ func parseMetadata(nr []NftResult) []CacheData {
 		err := json.Unmarshal([]byte(v.Metadata), &m)
 		if err != nil {
 			log.Error("json unmarshal err : ", err)
-			break
+			continue
 		}
 		split := strings.Split(m.Name, " #")
 		if len(split) != 2 {
 			log.Error("pass------")
-			break
+			continue
 		}
 		cd.Type = split[0]
 		cd.GameId = split[1]
@@ -540,12 +549,15 @@ func (bl *BscListener) QueryWalletBalance(c *gin.Context) {
 		res := bl.queryWalletBalance(service.Address)
 		c.JSON(200, res)
 	} else {
-		c.JSON(500, err.Error())
+		c.JSON(500, serializer.Response{
+			Code: 500,
+			Msg:  ErrorParam.Error(),
+		})
 	}
 }
 
 func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
-	var balanceList []balanceShow
+	balanceList := make([]balanceShow, 0)
 	addr := common.HexToAddress(address)
 	var wg sync.WaitGroup
 	wg.Add(4)
@@ -609,6 +621,12 @@ func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
 		})
 	}()
 	wg.Wait()
+	if len(balanceList) != 4 {
+		return serializer.Response{
+			Code: 500,
+			Msg:  "chain node err ",
+		}
+	}
 	return serializer.Response{
 		Code: 200,
 		Data: balanceList,

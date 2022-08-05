@@ -51,7 +51,10 @@ func (bl *BscListener) NativeTxRecord(c *gin.Context) {
 		res := bl.findFindNativeTxRecord(service.Address)
 		c.JSON(200, res)
 	} else {
-		c.JSON(200, err.Error())
+		c.JSON(500, serializer.Response{
+			Code: 500,
+			Msg:  ErrorParam.Error(),
+		})
 	}
 }
 
@@ -61,7 +64,10 @@ func (bl *BscListener) ERC20TxRecord(c *gin.Context) {
 		res := bl.findFindERC20TxRecord(service.Address, service.ContractAddress)
 		c.JSON(200, res)
 	} else {
-		c.JSON(200, err.Error())
+		c.JSON(500, serializer.Response{
+			Code: 500,
+			Msg:  ErrorParam.Error(),
+		})
 	}
 }
 
@@ -73,8 +79,8 @@ func (bl *BscListener) findFindERC20TxRecord(address, contractAddr string) seria
 		err := json.Unmarshal([]byte(record), &bscRes)
 		if err != nil {
 			return serializer.Response{
-				Code:  500,
-				Error: err.Error(),
+				Code: 500,
+				Msg:  err.Error(),
 			}
 		}
 		return serializer.Response{
@@ -82,7 +88,13 @@ func (bl *BscListener) findFindERC20TxRecord(address, contractAddr string) seria
 			Data: bscRes,
 		}
 	}
-	bscRes := bl.FindFindERC20TxRecord(contractAddr, address)
+	bscRes, err := bl.FindFindERC20TxRecord(contractAddr, address)
+	if err != nil {
+		return serializer.Response{
+			Code: 500,
+			Msg:  err.Error(),
+		}
+	}
 
 	return serializer.Response{
 		Code: 200,
@@ -104,17 +116,17 @@ func (bl *BscListener) GetBlockNum() uint64 {
 	}
 }
 
-func queryNativeTxRecord(address string, blockNum uint64) BscRes {
+func queryNativeTxRecord(address string, blockNum uint64) (BscRes, error) {
 	bscRes := BscRes{Result: make([]Result, 0)}
 	client := resty.New()
 	resp, err := client.R().
 		SetHeader("Accept", "application/json").
 		Get(getNativeUrl(blockNum, address))
 	if err != nil {
-		return bscRes
+		return bscRes, err
 	}
 	json.Unmarshal(resp.Body(), &bscRes)
-	return bscRes
+	return bscRes, nil
 }
 
 func (bl *BscListener) findFindNativeTxRecord(address string) serializer.Response {
@@ -125,8 +137,8 @@ func (bl *BscListener) findFindNativeTxRecord(address string) serializer.Respons
 		err := json.Unmarshal([]byte(record), &bscRes)
 		if err != nil {
 			return serializer.Response{
-				Code:  500,
-				Error: err.Error(),
+				Code: 500,
+				Msg:  err.Error(),
 			}
 		}
 		return serializer.Response{
@@ -134,7 +146,13 @@ func (bl *BscListener) findFindNativeTxRecord(address string) serializer.Respons
 			Data: bscRes,
 		}
 	}
-	bscRes := bl.FindNativeTransactionRecord(address)
+	bscRes, err := bl.FindNativeTransactionRecord(address)
+	if err != nil {
+		return serializer.Response{
+			Code: 500,
+			Msg:  err.Error(),
+		}
+	}
 
 	return serializer.Response{
 		Code: 200,
@@ -142,17 +160,20 @@ func (bl *BscListener) findFindNativeTxRecord(address string) serializer.Respons
 	}
 }
 
-func (bl *BscListener) FindNativeTransactionRecord(address string) BscRes {
+func (bl *BscListener) FindNativeTransactionRecord(address string) (BscRes, error) {
 	blockNum := bl.GetBlockNum()
 	uuid := uuid.New()
 	bl.ntManager.QueryNativeTxRecord(uuid, address, blockNum)
-	res, _ := bl.ntManager.WaitCall(uuid)
+	res, err := bl.ntManager.WaitCall(uuid)
+	if err != nil {
+		return BscRes{}, err
+	}
 	bscRes := res.(BscRes)
 	bnbRecord := make([]Result, 0)
 
 	if len(bscRes.Result) == 0 {
 		bscRes.Result = make([]Result, 0)
-		return bscRes
+		return bscRes, nil
 	}
 
 	for i, result := range bscRes.Result {
@@ -196,22 +217,25 @@ func (bl *BscListener) FindNativeTransactionRecord(address string) BscRes {
 	bscRes.Result = bnbRecord
 	cacheData, _ := json.Marshal(bscRes)
 	bl.rc.Set(address+nativeTxRecordSuffix, string(cacheData), duration)
-	return bscRes
+	return bscRes, nil
 }
 
-func (bl *BscListener) FindFindERC20TxRecord(contractAddr, address string) BscRes {
+func (bl *BscListener) FindFindERC20TxRecord(contractAddr, address string) (BscRes, error) {
 	blockNum := bl.GetBlockNum()
 	uuid := uuid.New()
 	bl.etManager.QueryERC20TxRecord(uuid, contractAddr, address, blockNum)
-	res, _ := bl.etManager.WaitCall(uuid)
+	res, err := bl.etManager.WaitCall(uuid)
+	if err != nil {
+		return BscRes{}, err
+	}
 	bscRes := res.(BscRes)
 	if len(bscRes.Result) == 0 {
 		bscRes.Result = make([]Result, 0)
-		return bscRes
+		return bscRes, nil
 	}
 	cacheData, _ := json.Marshal(bscRes)
 	bl.rc.Set(address+contractAddr+erc20TxRecordSuffix, string(cacheData), duration)
-	return bscRes
+	return bscRes, nil
 }
 
 func getNativeUrl(blockNumber uint64, address string) string {
@@ -222,15 +246,15 @@ func getERC20url(contractAddr, addr string, blockNumber uint64) string {
 	return fmt.Sprintf("%s?module=account&action=tokentx&address=%s&startblock=%d&endblock=%d&offset=10000&page=1&sort=desc&apikey=%s&contractaddress=%s", constants.BSCSCAN_API, addr, blockNumber-201600, blockNumber, os.Getenv("BSC_API_KEY"), contractAddr)
 }
 
-func queryERC20TxRecord(contractAddr, address string, blockNum uint64) BscRes {
+func queryERC20TxRecord(contractAddr, address string, blockNum uint64) (BscRes, error) {
 	bscRes := BscRes{Result: make([]Result, 0)}
 	client := resty.New()
 	resp, err := client.R().
 		SetHeader("Accept", "application/json").
 		Get(getERC20url(contractAddr, address, blockNum))
 	if err != nil {
-		return bscRes
+		return bscRes, err
 	}
 	json.Unmarshal(resp.Body(), &bscRes)
-	return bscRes
+	return bscRes, nil
 }

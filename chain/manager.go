@@ -179,12 +179,12 @@ func (m *NativeTxManager) WaitCall(uuid uuid.UUID) (interface{}, error) {
 }
 
 func (m *NativeTxManager) queryNativeTxRecordByBscScan(uuid uuid.UUID, walletAddr string, blockNum uint64) {
-	res := queryNativeTxRecord(walletAddr, blockNum)
+	res, err := queryNativeTxRecord(walletAddr, blockNum)
 	m.workLk.Lock()
 	defer m.workLk.Unlock()
 	m.callRes[uuid] <- result{
 		r:   res,
-		err: nil,
+		err: err,
 	}
 }
 
@@ -268,11 +268,11 @@ func (m *ERC20TxManager) WaitCall(uuid uuid.UUID) (interface{}, error) {
 }
 
 func (m *ERC20TxManager) queryErc20TxRecordByBscScan(uuid uuid.UUID, contractAddr, walletAddr string, blockNum uint64) {
-	res := queryERC20TxRecord(contractAddr, walletAddr, blockNum)
+	res, err := queryERC20TxRecord(contractAddr, walletAddr, blockNum)
 	m.workLk.Lock()
 	defer m.workLk.Unlock()
 	m.callRes[uuid] <- result{
 		r:   res,
-		err: nil,
+		err: err,
 	}
 }
