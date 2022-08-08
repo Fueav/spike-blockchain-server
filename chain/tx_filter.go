@@ -3,12 +3,12 @@ package chain
 const blockConfirmHeight = 15
 
 const (
-	SKK TokenType = iota
-	SKS
+	governanceToken TokenType = iota
+	gameToken
 	USDC
 	BNB
-	AUGT
-	AUNFT
+	gameVault
+	gameNft
 )
 
 const (

@@ -5,20 +5,20 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-redis/redis"
 	logger "github.com/ipfs/go-log"
-	"os"
 	"spike-blockchain-server/cache"
+	"spike-blockchain-server/constants"
 	"spike-blockchain-server/game"
 )
 
 var log = logger.Logger("chain")
 
 const (
-	BNB_BLOCKNUM   = "bnb_blockNum"
-	USDC_BLOCKNUM  = "usdc_blockNum"
-	SKK_BLOCKNUM   = "skk_blockNum"
-	SKS_BLOCKNUM   = "sks_blockNum"
-	AUNFT_BLOCKNUM = "aunft_blockNum"
-	BLOCK_NUM      = "blockNum"
+	BNB_BLOCKNUM        = "bnb_blockNum"
+	GAME_VAULT_BLOCKNUM = "vault_blockNum"
+	SKK_BLOCKNUM        = "skk_blockNum"
+	SKS_BLOCKNUM        = "sks_blockNum"
+	AUNFT_BLOCKNUM      = "aunft_blockNum"
+	BLOCK_NUM           = "blockNum"
 )
 
 type BscListener struct {
@@ -58,23 +58,23 @@ func NewBscListener(speedyNodeAddress string, targetWalletAddr string) (*BscList
 	erc20Notify := make(chan ERC20Tx, 10)
 	erc721Notify := make(chan ERC721Tx, 10)
 
-	usdcChan := make(DataChannel, 10)
+	vaultChan := make(DataChannel, 10)
 	skkChan := make(DataChannel, 10)
 	sksChan := make(DataChannel, 10)
 	aunftChan := make(DataChannel, 10)
-	eb.Subscribe(newBlockTopic, usdcChan)
+	eb.Subscribe(newBlockTopic, vaultChan)
 	eb.Subscribe(newBlockTopic, skkChan)
 	eb.Subscribe(newBlockTopic, sksChan)
 	eb.Subscribe(newBlockTopic, aunftChan)
 
 	l := make(map[TokenType]Listener)
 	l[BNB] = newBNBListener(newBNBTarget(targetWalletAddr), bl.ec, bl.rc, erc20Notify)
-	l[USDC] = newERC20Listener(newUSDCTarget(targetWalletAddr), USDCContractAddress, USDC_BLOCKNUM, bl.ec, bl.rc, erc20Notify, usdcChan, getABI(USDCContractAbi))
-	l[SKK] = newERC20Listener(newSKKTarget(targetWalletAddr), SKKContractAddress, SKK_BLOCKNUM, bl.ec, bl.rc, erc20Notify, skkChan, getABI(SKKContractAbi))
-	l[SKS] = newERC20Listener(newSKSTarget(targetWalletAddr), SKSContractAddress, SKS_BLOCKNUM, bl.ec, bl.rc, erc20Notify, sksChan, getABI(SKSContractAbi))
-	l[AUNFT] = newAUNFTListener(newAUNFTTarget(targetWalletAddr), AUNFTContractAddress, AUNFT_BLOCKNUM, bl.ec, bl.rc, erc721Notify, aunftChan, getABI(AUNFTAbi))
+	l[gameVault] = newGameVaultListener(newGameVaultTarget(targetWalletAddr), constants.GAME_VAULT_ADDRESS, GAME_VAULT_BLOCKNUM, bl.ec, bl.rc, erc20Notify, vaultChan, getABI(GameVaultABI))
+	l[governanceToken] = newERC20Listener(newSKKTarget(targetWalletAddr), constants.GOVERNANCE_TOKEN_ADDRESS, SKK_BLOCKNUM, bl.ec, bl.rc, erc20Notify, skkChan, getABI(GovernanceTokenABI))
+	l[gameToken] = newERC20Listener(newSKSTarget(targetWalletAddr), constants.GAME_TOKEN_ADDRESS, SKS_BLOCKNUM, bl.ec, bl.rc, erc20Notify, sksChan, getABI(GameTokenABI))
+	l[gameNft] = newAUNFTListener(newAUNFTTarget(targetWalletAddr), constants.GAME_NFT_ADDRESS, AUNFT_BLOCKNUM, bl.ec, bl.rc, erc721Notify, aunftChan, getABI(GameNftABI))
 	bl.l = l
-	spikeTxMgr := newSpikeTxMgr(game.NewKafkaClient(os.Getenv("KAFKA_ADDR")), erc20Notify, erc721Notify)
+	spikeTxMgr := newSpikeTxMgr(game.NewKafkaClient(constants.KAFKA_ADDR), erc20Notify, erc721Notify)
 	go spikeTxMgr.run()
 	return bl, nil
 }

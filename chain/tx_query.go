@@ -10,10 +10,10 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"golang.org/x/xerrors"
 	"math"
 	"math/big"
-	"os"
 	"sort"
 	"spike-blockchain-server/chain/contract"
 	"spike-blockchain-server/constants"
@@ -188,7 +188,7 @@ func (bl *BscListener) QueryNftMetadata(c *gin.Context) {
 }
 
 func (bl *BscListener) queryNftMetadata(tokenId int64, address string) serializer.Response {
-	aunft, err := contract.NewAunft(common.HexToAddress(AUNFTContractAddress), bl.ec)
+	aunft, err := contract.NewGameNft(common.HexToAddress(constants.GAME_NFT_ADDRESS), bl.ec)
 	if err != nil {
 		log.Error("new auNft err : ", err)
 		return serializer.Response{
@@ -358,6 +358,8 @@ func (bl *BscListener) queryWalletAddrNft(addr string, network string) serialize
 			Msg:  err.Error(),
 		}
 	}
+	log.Infof("111")
+
 	return serializer.Response{
 		Code: 200,
 		Data: nftType,
@@ -369,6 +371,7 @@ func (bl *BscListener) queryNftFromMoralis(addr string, network string) ([]NftTy
 	bl.nlManager.QueryNftList(uuid, addr, network)
 	result, err := bl.nlManager.WaitCall(uuid)
 	nr := result.([]NftResult)
+	log.Info(len(nr))
 	nr = bl.convertNftResult(nr)
 	dataList := parseMetadata(nr)
 	dataMap := parseCacheData(dataList)
@@ -410,7 +413,7 @@ func (bl *BscListener) GetJson(key string) string {
 }
 
 func (bl *BscListener) convertNftResult(res []NftResult) []NftResult {
-	aunft, err := contract.NewAunft(common.HexToAddress(AUNFTContractAddress), bl.ec)
+	aunft, err := contract.NewGameNft(common.HexToAddress(constants.GAME_NFT_ADDRESS), bl.ec)
 	if err != nil {
 		log.Error("new auNft err : ", err)
 		return res
@@ -477,7 +480,7 @@ func parseMetadata(nr []NftResult) []CacheData {
 		var m Metadata
 		err := json.Unmarshal([]byte(v.Metadata), &m)
 		if err != nil {
-			log.Error("json unmarshal err : ", err)
+			log.Error("json unmarshal err : ", err, v.TokenId, v.TokenUri)
 			continue
 		}
 		split := strings.Split(m.Name, " #")
@@ -504,8 +507,8 @@ func QueryWalletNft(cursor, walletAddr, network string, res []NftResult) []NftRe
 	client := resty.New()
 	resp, err := client.R().
 		SetHeader("Accept", "application/json").
-		SetHeader("x-api-key", os.Getenv("MORALIS_KEY")).
-		Get(getUrl(AUNFTContractAddress, walletAddr, network, cursor))
+		SetHeader("x-api-key", constants.MORALIS_KEY).
+		Get(getUrl(constants.GAME_NFT_ADDRESS, walletAddr, network, cursor))
 	if err != nil {
 		log.Errorf("query wallet nft , wallet : %s, err : %+v", walletAddr, err)
 		return res
@@ -572,7 +575,7 @@ func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		skkContract, err := contract.NewSkk(common.HexToAddress(SKKContractAddress), bl.ec)
+		skkContract, err := contract.NewGovernanceToken(common.HexToAddress(constants.GOVERNANCE_TOKEN_ADDRESS), bl.ec)
 		if err != nil {
 			return
 		}
@@ -588,7 +591,7 @@ func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
 
 	go func() {
 		defer wg.Done()
-		sksContract, err := contract.NewSks(common.HexToAddress(SKSContractAddress), bl.ec)
+		sksContract, err := contract.NewGameToken(common.HexToAddress(constants.GAME_TOKEN_ADDRESS), bl.ec)
 		if err != nil {
 			return
 		}
@@ -604,7 +607,7 @@ func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
 
 	go func() {
 		defer wg.Done()
-		usdcContract, err := contract.NewUsdc(common.HexToAddress(USDCContractAddress), bl.ec)
+		usdcContract, err := contract.NewUsdc(common.HexToAddress(constants.USDC_TOKEN_ADDRESS), bl.ec)
 		if err != nil {
 			return
 		}
@@ -642,9 +645,49 @@ func (bl *BscListener) queryWalletBalance(address string) serializer.Response {
 	}
 }
 
+// ToDecimal wei to decimals
+func ToDecimal(ivalue interface{}, decimals int) decimal.Decimal {
+	value := new(big.Int)
+	switch v := ivalue.(type) {
+	case string:
+		value.SetString(v, 10)
+	case *big.Int:
+		value = v
+	}
+
+	mul := decimal.NewFromFloat(float64(10)).Pow(decimal.NewFromFloat(float64(decimals)))
+	num, _ := decimal.NewFromString(value.String())
+	result := num.Div(mul)
+
+	return result
+}
+
+// ToWei decimals to wei
+func ToWei(iamount interface{}, decimals int) *big.Int {
+	amount := decimal.NewFromFloat(0)
+	switch v := iamount.(type) {
+	case string:
+		amount, _ = decimal.NewFromString(v)
+	case float64:
+		amount = decimal.NewFromFloat(v)
+	case int64:
+		amount = decimal.NewFromFloat(float64(v))
+	case decimal.Decimal:
+		amount = v
+	case *decimal.Decimal:
+		amount = *v
+	}
+
+	mul := decimal.NewFromFloat(float64(10)).Pow(decimal.NewFromFloat(float64(decimals)))
+	result := amount.Mul(mul)
+
+	wei := new(big.Int)
+	wei.SetString(result.String(), 10)
+
+	return wei
+}
+
 func parseBalance(balance *big.Int) string {
-	fbalance := new(big.Float)
-	fbalance.SetString(balance.String())
-	bal := new(big.Float).Quo(fbalance, big.NewFloat(math.Pow10(18))).String()
-	return bal
+	decimalBalance := ToDecimal(balance, 18)
+	return decimalBalance.String()
 }

@@ -26,10 +26,6 @@ func (t *BNBTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
 		return true, BNB_RECHARGE
 	}
 
-	if strings.ToLower(t.txAddress) == strings.ToLower(fromAddr) {
-		return true, BNB_WITHDRAW
-	}
-
 	return false, NOT_EXIST
 }
 

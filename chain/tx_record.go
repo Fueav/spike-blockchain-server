@@ -11,7 +11,6 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
 	"math/big"
-	"os"
 	"spike-blockchain-server/constants"
 	"spike-blockchain-server/serializer"
 	"strconv"
@@ -239,11 +238,11 @@ func (bl *BscListener) FindFindERC20TxRecord(contractAddr, address string) (BscR
 }
 
 func getNativeUrl(blockNumber uint64, address string) string {
-	return fmt.Sprintf("%s?module=account&action=txlist&address=%s&startblock=%d&endblock=%d&offset=10000&page=1&sort=desc&apikey=%s", constants.BSCSCAN_API, address, blockNumber-201600, blockNumber)
+	return fmt.Sprintf("%s?module=account&action=txlist&address=%s&startblock=%d&endblock=%d&offset=10000&page=1&sort=desc&apikey=%s", constants.BSCSCAN_API, address, blockNumber-201600, blockNumber, constants.BSC_API_KEY)
 }
 
 func getERC20url(contractAddr, addr string, blockNumber uint64) string {
-	return fmt.Sprintf("%s?module=account&action=tokentx&address=%s&startblock=%d&endblock=%d&offset=10000&page=1&sort=desc&apikey=%s&contractaddress=%s", constants.BSCSCAN_API, addr, blockNumber-201600, blockNumber, os.Getenv("BSC_API_KEY"), contractAddr)
+	return fmt.Sprintf("%s?module=account&action=tokentx&address=%s&startblock=%d&endblock=%d&offset=10000&page=1&sort=desc&apikey=%s&contractaddress=%s", constants.BSCSCAN_API, addr, blockNumber-201600, blockNumber, constants.BSC_API_KEY, contractAddr)
 }
 
 func queryERC20TxRecord(contractAddr, address string, blockNum uint64) (BscRes, error) {

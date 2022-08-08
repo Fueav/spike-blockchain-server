@@ -2,7 +2,7 @@ package price
 
 import (
 	"errors"
-	"spike-blockchain-server/chain"
+	"spike-blockchain-server/constants"
 )
 
 type TokenPriceService struct {
@@ -12,9 +12,9 @@ type TokenPriceService struct {
 func GetTokenContractAddrByTokenSymbol(token string) (string, error) {
 	switch token {
 	case "skk":
-		return chain.SKKContractAddress, nil
+		return constants.GOVERNANCE_TOKEN_ADDRESS, nil
 	case "sks":
-		return chain.SKSContractAddress, nil
+		return constants.GAME_TOKEN_ADDRESS, nil
 	case "test":
 		return "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47", nil
 	default:

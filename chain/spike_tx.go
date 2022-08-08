@@ -92,5 +92,4 @@ func (s *SpikeTxMgr) run() {
 			return
 		}
 	}
-
 }

@@ -92,6 +92,7 @@ func (m *NftListManager) WaitCall(uuid uuid.UUID) (interface{}, error) {
 func (m *NftListManager) queryNftListByMoralis(uuid uuid.UUID, walletAddr, network string) {
 	var res []NftResult
 	res = QueryWalletNft("", walletAddr, network, res)
+	log.Info("---", len(res))
 	m.workLk.Lock()
 	defer m.workLk.Unlock()
 	m.callRes[uuid] <- result{
