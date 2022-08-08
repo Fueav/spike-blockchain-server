@@ -43,6 +43,7 @@ func NewRouter(chainApi *chain.BscListener) *gin.Engine {
 			chain.POST("nft/metadata", chainApi.QueryNftMetadata)
 			chain.POST("nft/type", chainApi.QueryWalletAddrNft)
 			chain.POST("nft/list", chainApi.QueryNftListByType)
+			chain.POST("erc20/price", api.FindERC20TokenPrice)
 		}
 		wallet := v1.Group("/wallet")
 		{

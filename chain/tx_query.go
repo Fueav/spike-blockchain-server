@@ -424,21 +424,27 @@ func (bl *BscListener) convertNftResult(res []NftResult) []NftResult {
 			}
 			uri, err := aunft.TokenURI(nil, big.NewInt(int64(tokenId)))
 			if err != nil {
-				log.Error("query tokenUri err : ", err)
+				log.Errorf("query tokenUri tokenId : %d, err : %+v", tokenId, err)
 				continue
 			}
 			client := resty.New()
 			t3 := time.Now()
 			resp, err := client.R().Get(uri)
+			if err != nil {
+				log.Errorf("req err : uri :%s", uri)
+				continue
+			}
 			log.Info("query metadata took :", time.Since(t3))
 			log.Infof("query nft tokenId : %d, uri : %s", tokenId, uri)
 			var m Metadata
 			err = json.Unmarshal(resp.Body(), &m)
 			if err != nil {
+				log.Errorf("json unmarshal err : %+v, resp : %s", err, string(resp.Body()))
 				continue
 			}
 			metadata, err := json.Marshal(m)
 			if err != nil {
+				log.Errorf("json marshal err : %+v, meatadata : %+v", err, m)
 				continue
 			}
 			res[k].TokenUri = uri
@@ -476,7 +482,7 @@ func parseMetadata(nr []NftResult) []CacheData {
 		}
 		split := strings.Split(m.Name, " #")
 		if len(split) != 2 {
-			log.Error("pass------")
+			log.Errorf("nft name len != 2")
 			continue
 		}
 		cd.Type = split[0]
@@ -496,13 +502,16 @@ func parseMetadata(nr []NftResult) []CacheData {
 
 func QueryWalletNft(cursor, walletAddr, network string, res []NftResult) []NftResult {
 	client := resty.New()
-	resp, _ := client.R().
+	resp, err := client.R().
 		SetHeader("Accept", "application/json").
 		SetHeader("x-api-key", os.Getenv("MORALIS_KEY")).
 		Get(getUrl(AUNFTContractAddress, walletAddr, network, cursor))
-
+	if err != nil {
+		log.Errorf("query wallet nft , wallet : %s, err : %+v", walletAddr, err)
+		return res
+	}
 	var nrs NftResults
-	err := json.Unmarshal(resp.Body(), &nrs)
+	err = json.Unmarshal(resp.Body(), &nrs)
 	if err != nil {
 		log.Error("json unmarshal err : ", err)
 		return res
