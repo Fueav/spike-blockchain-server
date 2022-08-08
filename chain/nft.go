@@ -110,6 +110,8 @@ func (al *AUNFTListener) PastEventFilter(fromBlockNum, toBlockNum uint64) error 
 			fromAddr := common.HexToAddress(l.Topics[1].Hex()).String()
 			toAddr := common.HexToAddress(l.Topics[2].Hex()).String()
 			_, txType := al.Accept(fromAddr, toAddr)
+			al.rc.Del(fromAddr + nftTypeSuffix)
+			al.rc.Del(toAddr + nftTypeSuffix)
 			al.erc721Notify <- ERC721Tx{
 				From:    fromAddr,
 				To:      toAddr,

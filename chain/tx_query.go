@@ -279,7 +279,25 @@ func (bl *BscListener) QueryNftListByType(c *gin.Context) {
 
 func (bl *BscListener) queryNftListByType(addr, network, tp string, page, pageSize int64) serializer.Response {
 	log.Infof("page : %d, pageSize : %d", page, pageSize)
-	if result := bl.GetJson(network + addr + tp); result == "" {
+	if t := bl.GetJson(addr + nftTypeSuffix); t != "" {
+		log.Infof("queryWalletAddrNft , wallet : %s , nft : %s", addr, t)
+		nftType := make([]NftType, 0)
+		err := json.Unmarshal([]byte(t), &nftType)
+		if err != nil {
+			return serializer.Response{
+				Code: 500,
+				Msg:  err.Error(),
+			}
+		}
+		if len(nftType) == 0 {
+			return serializer.Response{
+				Code: 200,
+				Data: nftType,
+			}
+		}
+	}
+
+	if result := bl.GetJson(addr + tp); result == "" {
 		nftType, err := bl.queryNftFromMoralis(addr, network)
 		if err != nil {
 			return serializer.Response{
@@ -326,7 +344,6 @@ func (bl *BscListener) QueryWalletAddrNft(c *gin.Context) {
 			}
 		}
 		res := bl.queryWalletAddrNft(service.WalletAddress, bl.network)
-		log.Info("sss:", res.Data)
 		c.JSON(200, res)
 	} else {
 		c.JSON(500, serializer.Response{
@@ -337,7 +354,8 @@ func (bl *BscListener) QueryWalletAddrNft(c *gin.Context) {
 }
 
 func (bl *BscListener) queryWalletAddrNft(addr string, network string) serializer.Response {
-	if t := bl.GetJson(network + addr + nftTypeSuffix); t != "" {
+	if t := bl.GetJson(addr + nftTypeSuffix); t != "" {
+		log.Infof("queryWalletAddrNft , wallet : %s , nft : %s", addr, t)
 		nftType := make([]NftType, 0)
 		err := json.Unmarshal([]byte(t), &nftType)
 		if err != nil {
@@ -358,8 +376,6 @@ func (bl *BscListener) queryWalletAddrNft(addr string, network string) serialize
 			Msg:  err.Error(),
 		}
 	}
-	log.Infof("111")
-
 	return serializer.Response{
 		Code: 200,
 		Data: nftType,
@@ -371,7 +387,6 @@ func (bl *BscListener) queryNftFromMoralis(addr string, network string) ([]NftTy
 	bl.nlManager.QueryNftList(uuid, addr, network)
 	result, err := bl.nlManager.WaitCall(uuid)
 	nr := result.([]NftResult)
-	log.Info(len(nr))
 	nr = bl.convertNftResult(nr)
 	dataList := parseMetadata(nr)
 	dataMap := parseCacheData(dataList)
@@ -387,17 +402,15 @@ func (bl *BscListener) queryNftFromMoralis(addr string, network string) ([]NftTy
 		if err != nil {
 			break
 		}
-		bl.SetJson(network+addr+k, string(cacheByte), duration)
-	}
-	if len(nftType) == 0 {
-		return nftType, nil
-	}
-	nftTypeByte, err := json.Marshal(nftType)
-	if err != nil {
-		return nil, err
+		bl.SetJson(addr+k, string(cacheByte), duration)
 	}
 
-	bl.SetJson(network+addr+nftTypeSuffix, string(nftTypeByte), duration)
+	nftTypeByte, err := json.Marshal(nftType)
+	if err != nil {
+		return nftType, err
+	}
+
+	bl.SetJson(addr+nftTypeSuffix, string(nftTypeByte), duration)
 	return nftType, err
 }
 

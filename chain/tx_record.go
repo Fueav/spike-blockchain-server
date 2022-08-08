@@ -172,6 +172,8 @@ func (bl *BscListener) FindNativeTransactionRecord(address string) (BscRes, erro
 
 	if len(bscRes.Result) == 0 {
 		bscRes.Result = make([]Result, 0)
+		cacheData, _ := json.Marshal(bscRes)
+		bl.rc.Set(address+nativeTxRecordSuffix, string(cacheData), duration)
 		return bscRes, nil
 	}
 
@@ -230,6 +232,8 @@ func (bl *BscListener) FindFindERC20TxRecord(contractAddr, address string) (BscR
 	bscRes := res.(BscRes)
 	if len(bscRes.Result) == 0 {
 		bscRes.Result = make([]Result, 0)
+		cacheData, _ := json.Marshal(bscRes)
+		bl.rc.Set(address+contractAddr+erc20TxRecordSuffix, string(cacheData), duration)
 		return bscRes, nil
 	}
 	cacheData, _ := json.Marshal(bscRes)
