@@ -26,23 +26,18 @@ func (t *BNBTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
 		return true, BNB_RECHARGE
 	}
 
-	if strings.ToLower(t.txAddress) == strings.ToLower(fromAddr) {
-		return true, BNB_WITHDRAW
-	}
-
 	return false, NOT_EXIST
 }
 
 type BNBListener struct {
 	TxFilter
-	erc20Notify    chan ERC20Tx
-	rechargeNotify chan ERC20Tx
-	ec             *ethclient.Client
-	rc             *redis.Client
-	chainId        *big.Int
+	erc20Notify chan ERC20Tx
+	ec          *ethclient.Client
+	rc          *redis.Client
+	chainId     *big.Int
 }
 
-func newBNBListener(filter TxFilter, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx, rechargeNotify chan ERC20Tx) *BNBListener {
+func newBNBListener(filter TxFilter, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx) *BNBListener {
 	chainId, err := ec.NetworkID(context.Background())
 	if err != nil {
 		log.Error("query network id err : ", err)
@@ -51,7 +46,6 @@ func newBNBListener(filter TxFilter, ec *ethclient.Client, rc *redis.Client, erc
 	return &BNBListener{
 		filter,
 		erc20Notify,
-		rechargeNotify,
 		ec,
 		rc,
 		chainId,
@@ -60,23 +54,6 @@ func newBNBListener(filter TxFilter, ec *ethclient.Client, rc *redis.Client, erc
 
 func (bl *BNBListener) run() {
 	go bl.NewBlockFilter()
-	if bl.rc.Get(BNB_BLOCKNUM).Err() == redis.Nil {
-		log.Infof("bnb_blockNum is not exist")
-		return
-	}
-	nowBlockNum, err := bl.ec.BlockNumber(context.Background())
-	if err != nil {
-		log.Error("query now bnb_blockNum err :", err)
-		return
-	}
-	blockNum, err := bl.rc.Get(BNB_BLOCKNUM).Uint64()
-	if err != nil {
-		log.Error("query cache bnb_blockNum err : ", err)
-		return
-	}
-	if blockNum < nowBlockNum {
-		bl.PastBlockFilter(blockNum, nowBlockNum)
-	}
 }
 
 func (bl *BNBListener) NewBlockFilter() error {
@@ -95,37 +72,48 @@ func (bl *BNBListener) NewBlockFilter() error {
 			})
 			log.Error("bnb subscribe err : ", err)
 		case header := <-newBlockChan:
-
-			block, err := ethClient.BlockByHash(context.Background(), header.Hash())
+			height := new(big.Int).Sub(header.Number, big.NewInt(blockConfirmHeight))
+			eb.Publish(newBlockTopic, height)
+			log.Infof("header num : %d, height : %d", header.Number.Int64(), height.Int64())
+			block, err := ethClient.BlockByNumber(context.Background(), height)
 			if err != nil {
-				log.Errorf("bnb blockByHash err , height : %d  ,err : %v", block.Number(), err)
+				log.Errorf("bnb blockByHash err : %+v", err)
 				break
 			}
 			bl.SingleBlockFilter(block)
 			log.Infof("bnb listen new block %d finished", block.Number())
-			bl.rc.Set(BNB_BLOCKNUM, block.Number().Int64(), 0)
+			bl.rc.Set(BLOCK_NUM, height.Int64(), 0)
 		}
 	}
+}
+
+func (bl *BNBListener) handlePastBlock(fromBlock, toBlock uint64) {
+	go bl.PastBlockFilter(fromBlock, toBlock)
 }
 
 func (bl *BNBListener) PastBlockFilter(blockNum, nowBlockNum uint64) error {
 	for i := blockNum; i < nowBlockNum; i++ {
 		log.Infof("bnb past block num : %d", i)
-		go func(num uint64) {
-			block, err := bl.ec.BlockByNumber(context.Background(), big.NewInt(int64(num)))
-			if err != nil {
-				log.Error()
-				return
-			}
-			bl.SingleBlockFilter(block)
-		}(i)
+		//go func(num uint64) {
+		//	block, err := bl.ec.BlockByNumber(context.Background(), big.NewInt(int64(num)))
+		//	if err != nil {
+		//		log.Error("blockByNumber err : ", err)
+		//		return
+		//	}
+		//	bl.SingleBlockFilter(block)
+		//}(i)
+		block, err := bl.ec.BlockByNumber(context.Background(), big.NewInt(int64(i)))
+		if err != nil {
+			log.Error("blockByNumber err : ", err)
+			break
+		}
+		bl.SingleBlockFilter(block)
 	}
 	return nil
 }
 
 func (bl *BNBListener) SingleBlockFilter(block *types.Block) error {
 	log.Infof("bnb height : %d , tx num :  %d", block.Number(), len(block.Transactions()))
-
 	for _, tx := range block.Transactions() {
 		log.Infof("bnb tx : %s", tx.Hash())
 		var fromAddr string
@@ -158,11 +146,7 @@ func (bl *BNBListener) SingleBlockFilter(block *types.Block) error {
 			PayTime: int64(block.Time() * 1000),
 			Amount:  tx.Value().String(),
 		}
-		if check(int(txType)) {
-			bl.rechargeNotify <- tx
-		} else {
-			bl.erc20Notify <- tx
-		}
+		bl.erc20Notify <- tx
 	}
 	return nil
 }

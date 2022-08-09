@@ -1,12 +1,14 @@
 package chain
 
+const blockConfirmHeight = 15
+
 const (
-	SKK TokenType = iota
-	SKS
+	governanceToken TokenType = iota
+	gameToken
 	USDC
 	BNB
-	AUGT
-	AUNFT
+	gameVault
+	gameNft
 )
 
 const (
@@ -19,8 +21,7 @@ const (
 	USDC_WITHDRAW
 	BNB_WITHDRAW
 	AUNFT_TRANSFER
-	AUGT_RECHARGE
-	AUGT_WITHDRAW
+	AUNFT_IMPORT
 	NOT_EXIST
 )
 
@@ -31,13 +32,22 @@ var recharge = map[int]struct{}{
 	BNB_RECHARGE:  {},
 }
 
+var nftImport = map[int]struct{}{
+	AUNFT_IMPORT: {},
+}
+
 type TokenType int
 
 type TxFilter interface {
 	Accept(fromAddr, toAddr string) (bool, uint64)
 }
 
-func check(txType int) bool {
+func checkRecharge(txType int) bool {
 	_, ok := recharge[txType]
+	return ok
+}
+
+func checkImport(txType int) bool {
+	_, ok := nftImport[txType]
 	return ok
 }

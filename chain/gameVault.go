@@ -11,51 +11,24 @@ import (
 	"strings"
 )
 
-type SKSTarget struct {
+type GameVaultTarget struct {
 	txAddress string
 }
 
-func newSKSTarget(address string) *SKSTarget {
-	return &SKSTarget{
+func newGameVaultTarget(address string) *GameVaultTarget {
+	return &GameVaultTarget{
 		txAddress: address,
 	}
 }
 
-func (t *SKSTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
-	if strings.ToLower(t.txAddress) == strings.ToLower(toAddr) {
-		return true, SKS_RECHARGE
-	}
-
+func (t *GameVaultTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
 	if strings.ToLower(t.txAddress) == strings.ToLower(fromAddr) {
-		return true, SKS_WITHDRAW
+		return true, BNB_WITHDRAW
 	}
-
 	return false, NOT_EXIST
 }
 
-type SKKTarget struct {
-	txAddress string
-}
-
-func newSKKTarget(address string) *SKKTarget {
-	return &SKKTarget{
-		txAddress: address,
-	}
-}
-
-func (t *SKKTarget) Accept(fromAddr, toAddr string) (bool, uint64) {
-	if strings.ToLower(t.txAddress) == strings.ToLower(toAddr) {
-		return true, SKK_RECHARGE
-	}
-
-	if strings.ToLower(t.txAddress) == strings.ToLower(fromAddr) {
-		return true, SKK_WITHDRAW
-	}
-
-	return false, NOT_EXIST
-}
-
-type ERC20Listener struct {
+type GameVaultListener struct {
 	TxFilter
 	contractAddr   string
 	cacheBlockNum  string
@@ -66,8 +39,8 @@ type ERC20Listener struct {
 	abi            abi.ABI
 }
 
-func newERC20Listener(filter TxFilter, contractAddr string, cacheBlockNum string, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx, newBlockNotify DataChannel, abi abi.ABI) *ERC20Listener {
-	return &ERC20Listener{
+func newGameVaultListener(filter TxFilter, contractAddr string, cacheBlockNum string, ec *ethclient.Client, rc *redis.Client, erc20Notify chan ERC20Tx, newBlockNotify DataChannel, abi abi.ABI) *GameVaultListener {
+	return &GameVaultListener{
 		filter,
 		contractAddr,
 		cacheBlockNum,
@@ -79,15 +52,15 @@ func newERC20Listener(filter TxFilter, contractAddr string, cacheBlockNum string
 	}
 }
 
-func (el *ERC20Listener) run() {
+func (el *GameVaultListener) run() {
 	go el.NewEventFilter(el.contractAddr)
 }
 
-func (el *ERC20Listener) handlePastBlock(fromBlock, toBlock uint64) {
+func (el *GameVaultListener) handlePastBlock(fromBlock, toBlock uint64) {
 	go el.PastEventFilter(el.contractAddr, fromBlock, toBlock)
 }
 
-func (el *ERC20Listener) NewEventFilter(contractAddr string) error {
+func (el *GameVaultListener) NewEventFilter(contractAddr string) error {
 	for {
 		select {
 		case de := <-el.newBlockNotify:
@@ -97,7 +70,7 @@ func (el *ERC20Listener) NewEventFilter(contractAddr string) error {
 	}
 }
 
-func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBlockNum uint64) error {
+func (el *GameVaultListener) PastEventFilter(contractAddr string, fromBlockNum, toBlockNum uint64) error {
 	log.Infof("erc20 past event filter, type : %s, fromBlock : %d, toBlock : %d ", el.cacheBlockNum, fromBlockNum, toBlockNum)
 	ethClient := el.ec
 	contractAddress := common.HexToAddress(contractAddr)
@@ -115,14 +88,17 @@ func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBl
 	}
 	for _, logEvent := range sub {
 		switch logEvent.Topics[0].String() {
-		case EventSignHash(TransferTopic):
-			intr, err := el.abi.Events["Transfer"].Inputs.Unpack(logEvent.Data)
+		case EventSignHash(WITHRAWALTOPIC):
+			intr, err := el.abi.Events["Withdraw"].Inputs.Unpack(logEvent.Data)
 			if err != nil {
-				log.Error("erc20 data unpack err : ", err)
+				log.Error("game vault data unpack err : ", err)
 				break
 			}
-			fromAddr := common.HexToAddress(logEvent.Topics[1].Hex()).String()
-			toAddr := common.HexToAddress(logEvent.Topics[2].Hex()).String()
+			if intr[0].(common.Address).String() != emptyAddress {
+				continue
+			}
+			fromAddr := intr[1].(common.Address).String()
+			toAddr := intr[2].(common.Address).String()
 			accept, txType := el.Accept(fromAddr, toAddr)
 			if !accept {
 				continue
@@ -144,7 +120,7 @@ func (el *ERC20Listener) PastEventFilter(contractAddr string, fromBlockNum, toBl
 				TxHash:  logEvent.TxHash.Hex(),
 				Status:  status,
 				PayTime: int64(block.Time() * 1000),
-				Amount:  intr[0].(*big.Int).String(),
+				Amount:  intr[3].(*big.Int).String(),
 			}
 		}
 	}
