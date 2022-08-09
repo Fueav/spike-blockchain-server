@@ -14,6 +14,7 @@ type result struct {
 type NftListManager struct {
 	counter Counter
 	nlq     *nftListQueue
+	listLk  sync.Mutex
 	workLk  sync.Mutex
 	callRes map[uuid.UUID]chan result
 	notify  chan struct{}
@@ -21,7 +22,7 @@ type NftListManager struct {
 
 func NewNftListManager() *NftListManager {
 	var counter Counter
-	counter.Set(5, time.Second)
+	counter.Set(12, time.Second)
 	m := &NftListManager{
 		counter: counter,
 		nlq:     &nftListQueue{},
@@ -104,6 +105,7 @@ func (m *NftListManager) queryNftListByMoralis(uuid uuid.UUID, walletAddr, netwo
 type NativeTxManager struct {
 	counter Counter
 	ntq     *nativeTxQueue
+	listLk  sync.Mutex
 	workLk  sync.Mutex
 	callRes map[uuid.UUID]chan result
 	notify  chan struct{}
@@ -111,7 +113,7 @@ type NativeTxManager struct {
 
 func NewNativeTxManager() *NativeTxManager {
 	var counter Counter
-	counter.Set(5, time.Second)
+	counter.Set(6, time.Second)
 	m := &NativeTxManager{
 		counter: counter,
 		ntq:     &nativeTxQueue{},
@@ -192,6 +194,7 @@ func (m *NativeTxManager) queryNativeTxRecordByBscScan(uuid uuid.UUID, walletAdd
 type ERC20TxManager struct {
 	counter Counter
 	etq     *erc20TxQueue
+	listLk  sync.Mutex
 	workLk  sync.Mutex
 	callRes map[uuid.UUID]chan result
 	notify  chan struct{}
@@ -199,7 +202,7 @@ type ERC20TxManager struct {
 
 func NewERC20TxManager() *ERC20TxManager {
 	var counter Counter
-	counter.Set(5, time.Second)
+	counter.Set(6, time.Second)
 	m := &ERC20TxManager{
 		counter: counter,
 		etq:     &erc20TxQueue{},

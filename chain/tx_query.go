@@ -312,7 +312,7 @@ func (bl *BscListener) queryNftListByType(addr, network, tp string, page, pageSi
 			}
 		}
 	}
-	nftjson := bl.GetJson(network + addr + tp)
+	nftjson := bl.GetJson(addr + tp)
 	var cdList CacheDataList
 	err := json.Unmarshal([]byte(nftjson), &cdList)
 	if err != nil {
